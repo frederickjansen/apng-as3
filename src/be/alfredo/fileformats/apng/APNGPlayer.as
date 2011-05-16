@@ -3,9 +3,7 @@ package be.alfredo.fileformats.apng
 	import flash.display.Bitmap;
 	import flash.display.Sprite;
 	import flash.events.Event;
-	import flash.events.EventDispatcher;
 	import flash.events.IOErrorEvent;
-	import flash.events.ProgressEvent;
 	import flash.events.TimerEvent;
 	import flash.net.URLLoader;
 	import flash.net.URLLoaderDataFormat;
@@ -180,6 +178,7 @@ package be.alfredo.fileformats.apng
 		private function updateFrame(event:TimerEvent):void
 		{
 			bmp.bitmapData = frames[currentFrame].images[0];
+			// TODO: Delay is slightly larger than natively in the browser
 			playTimer.delay = frames[currentFrame].delay;
 			
 			if( currentFrame == apngDecoder.numFrames - 1 )

@@ -3,7 +3,7 @@ package be.alfredo.fileformats.apng
 	import be.alfredo.io.BitArray;
 	
 	import flash.display.BitmapData;
-	import flash.display.Sprite;
+	import flash.display.BlendMode;
 	import flash.events.Event;
 	import flash.events.EventDispatcher;
 	import flash.utils.ByteArray;
@@ -60,6 +60,12 @@ package be.alfredo.fileformats.apng
 		 * @private
 		 */ 
 		private var currentFrame:int = -1;
+
+		/**
+		 * The amount of bytes necessary for each pixel
+		 * @private
+		 */
+		private var bytesPerPixel:int;
 		
 		private var _width:uint;
 		private var _height:uint;
@@ -320,7 +326,6 @@ package be.alfredo.fileformats.apng
 		 * 
 		 * @param	data	BitArray of image header
 		 */ 
-		
 		private function parseHeader( data:BitArray ):void
 		{			
 			_width = data.readUnsignedInt();
@@ -330,6 +335,28 @@ package be.alfredo.fileformats.apng
 			_compressionMethod = data.readUnsignedByte();
 			_filterMethod = data.readUnsignedByte();
 			_interlaceMethod = data.readUnsignedByte();
+			
+			determineBytesPerPixel();
+		}
+		
+		/**
+		 * Set the amount of pixels per byte by looking at the 
+		 * colour type and bit depth of a channel.
+		 */ 
+		private function determineBytesPerPixel():void
+		{
+			if( bitDepth == 8 && colourType == 6 )		// RGBA
+			{
+				bytesPerPixel = 4;
+			}
+			else if( bitDepth == 8 && colourType == 2 )	// RGB
+			{
+				bytesPerPixel = 3;
+			}
+			else
+			{
+				throw new Error( "The combination of bit depth " + bitDepth + " and colour type" + colourType + " is not supported." );
+			}
 		}
 		
 		/**
@@ -391,7 +418,7 @@ package be.alfredo.fileformats.apng
 		}
 		
 		/**
-		 * Uncompress the image data and ready it to reconstruct the image
+		 * Uncompress the image data and read it to reconstruct the image
 		 * 
 		 * @param	data	BitArray of the image data
 		 * @param	fdAT	Boolean indicating whether we're dealing with an fdAT 
@@ -423,9 +450,12 @@ package be.alfredo.fileformats.apng
 			}
 			
 			// TODO: Support for different Colour Types
-			switch(_colourType) {
-				case 6:
-					createRGBAImage( data );
+			switch( _colourType )
+			{
+				case 2:							// RGB
+					createTrueColorImage( data );
+				case 6:							// RGBA
+					createTrueColorImage( data );
 					break;
 				default:
 					throw new Error( "Colour Type not supported" );
@@ -443,7 +473,7 @@ package be.alfredo.fileformats.apng
 		 * the next pixel.
 		 * In the first loop we restore all bytes to 
 		 * their original value. A second loop will modify the 
-		 * pixels from RGBA to ARGB and set them individually on 
+		 * pixels from RGB(A) to (A)RGB and set them individually on 
 		 * a BitmapData object.
 		 * Previously processed bytes are temporarily kept for the 
 		 * decorrelation process, even if they're not needed in a 
@@ -451,31 +481,31 @@ package be.alfredo.fileformats.apng
 		 * 
 		 * @param	data	The encoded image data
 		 */ 
-		private function createRGBAImage( data:BitArray ):void
+		private function createTrueColorImage( data:BitArray ):void
 		{
-			var image:BitmapData = new BitmapData( _frames[currentFrame].frameControlChunk.width, _frames[currentFrame].frameControlChunk.height, true, 0x00000000 );		
+			var image:BitmapData = new BitmapData( _width, _height, true, 0x00000000 );	
+			// Width of the frame, not of the total image
+			var fWidth:uint = _frames[currentFrame].frameControlChunk.width;
+			var fHeight:uint = _frames[currentFrame].frameControlChunk.height;
 			var x:uint = 0;
 			var y:uint = 0;
 			var filterType:uint;
 			var c:uint;
+			var byteWidth:uint = fWidth * bytesPerPixel;
 			var currentColour:uint;
-			var currentColourRow:Vector.<uint> = new Vector.<uint>( _width << 2, true );
-			var previousColourRow:Vector.<uint> = new Vector.<uint>( _width << 2, true );
-			var pixels:ByteArray = new ByteArray();
+			var currentColourRow:Vector.<uint> = new Vector.<uint>( byteWidth, true );
+			var previousColourRow:Vector.<uint> = new Vector.<uint>( byteWidth, true );
+			var pixels:BitArray = new BitArray();
 			var colour:uint;
-			
-			// TODO: hardcoded value of the amount of bytes for a RGBA pixel
-			// This should be made dynamic to support other colour types
-			var bytesPerPixel:uint = 4;
 			
 			image.lock();
 			
-			for( y = 0; y < _height; y++ )
+			for( y = 0; y < fHeight; y++ )
 			{
 				filterType = data.readByte();
 				if( filterType == FILTER_METHOD_NONE )
 				{
-					for( x = 0; x < (_width << 2); x++ )
+					for( x = 0; x < byteWidth; x++ )
 					{
 						c = data.readUnsignedByte();
 						// This equals modulo 256
@@ -490,8 +520,8 @@ package be.alfredo.fileformats.apng
 					}
 				}
 				else if( filterType == FILTER_METHOD_SUB )
-				{	
-					for ( x = 0; x < (_width << 2); x++ )
+				{
+					for ( x = 0; x < byteWidth; x++ )
 					{
 						c = data.readUnsignedByte();
 						
@@ -511,7 +541,7 @@ package be.alfredo.fileformats.apng
 				}
 				else if( filterType == FILTER_METHOD_UP )
 				{
-					for ( x = 0; x < (_width << 2); x++ )
+					for ( x = 0; x < byteWidth; x++ )
 					{
 						c = data.readUnsignedByte();
 						
@@ -531,7 +561,7 @@ package be.alfredo.fileformats.apng
 				}
 				else if( filterType == FILTER_METHOD_AVERAGE )
 				{
-					for( x = 0; x < (_width << 2); x++ )
+					for( x = 0; x < byteWidth; x++ )
 					{
 						c = data.readUnsignedByte();
 						
@@ -562,7 +592,7 @@ package be.alfredo.fileformats.apng
 				}
 				else if( filterType == FILTER_METHOD_PAETH )
 				{					
-					for( x = 0; x < (_width << 2); x++ )
+					for( x = 0; x < byteWidth; x++ )
 					{
 						c = data.readUnsignedByte();
 						
@@ -598,18 +628,42 @@ package be.alfredo.fileformats.apng
 			
 			pixels.position = 0;
 			
-			for( y = 0; y < _height; y++ )
+			var xOffset:uint = _frames[currentFrame].frameControlChunk.xOffset;
+			var yOffset:uint = _frames[currentFrame].frameControlChunk.yOffset;
+			
+			if( colourType == 6 ) // RGBA
 			{
-				for( x = 0; x < _width; x++ )
+				for( y = 0; y < fHeight; y++ )
 				{
-					colour = pixels.readUnsignedInt();
-					// PNG colours are stored RGBA, Flash expects ARGB
-					colour = (colour >>> 8) | ((colour & 0xFF) << 24);
-					image.setPixel32( x, y, colour );
+					for( x = 0; x < fWidth; x++ )
+					{
+						colour = pixels.readUnsignedInt();
+						// PNG colours are stored RGBA, Flash expects ARGB
+						colour = (colour >>> 8) | ((colour & 0xFF) << 24);
+						image.setPixel32( x + xOffset, y + yOffset, colour );
+					}
+				}
+			}
+			else if( colourType == 2 ) // RGB
+			{
+				for( y = 0; y < fHeight; y++ )
+				{
+					for( x = 0; x < fWidth; x++ )
+					{
+						colour = pixels.readUnsignedBits( 24 );
+						image.setPixel( x + xOffset, y + yOffset, colour );
+					}
 				}
 			}
 			
 			image.unlock();
+			if( _frames[currentFrame].frameControlChunk.blendOp == 0 )
+			{
+				/*var tempImage:BitmapData = new BitmapData( fWidth, fHeight );
+				tempImage.draw( _frames[currentFrame - 1].images[0], null, null, BlendMode.ADD );
+				tempImage.draw( image, null, null, BlendMode.ADD );*/
+				image.draw( _frames[currentFrame - 1].images[0], null, null, BlendMode.ADD );				
+			}
 			_frames[currentFrame].images.push( image );
 			
 			image = null;

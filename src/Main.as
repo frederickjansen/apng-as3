@@ -2,9 +2,6 @@ package
 {
 	import be.alfredo.fileformats.apng.APNGPlayer;
 	
-	import com.bit101.components.PushButton;
-	import com.bit101.components.Slider;
-	
 	import flash.display.SimpleButton;
 	import flash.display.Sprite;
 	import flash.display.StageAlign;
@@ -17,8 +14,8 @@ package
 	{
 
 		private var apngPlayer:APNGPlayer;
-		private var slider:Slider;
-		private var toggleButton:PushButton;
+		//private var slider:Slider;
+		//private var toggleButton:PushButton;
 		
 		public function Main()
 		{
@@ -38,7 +35,7 @@ package
 		
 		protected function onApngLoaded(event:Event):void
 		{
-			slider = new Slider();
+			/*slider = new Slider();
 			slider.minimum = 0;
 			slider.maximum = apngPlayer.numFrames - 1;
 			slider.addEventListener( Event.CHANGE, onSliderChange );
@@ -49,12 +46,12 @@ package
 			toggleButton = new PushButton( null, 10, 170, "Pause", clickHandler );
 			toggleButton.toggle = true;
 			toggleButton.selected = true;
-			addChild( toggleButton );
+			addChild( toggleButton );*/
 			
 			apngPlayer.play();
 		}
 		
-		private function clickHandler( event:MouseEvent ):void
+		/*private function clickHandler( event:MouseEvent ):void
 		{
 			if( toggleButton.selected )
 			{
@@ -73,7 +70,7 @@ package
 			apngPlayer.gotoAndStop( uint( slider.value ) );
 			toggleButton.label = "Play";
 			toggleButton.selected = false;
-		}
+		}*/
 		
 	}
 }

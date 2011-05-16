@@ -1,7 +1,7 @@
 package be.alfredo.fileformats.apng
 {
 	/**
-	 * 
+	 * Contains information about a specific frame in the animation.
 	 * 
 	 * @author Frederick Jansen
 	 */ 
