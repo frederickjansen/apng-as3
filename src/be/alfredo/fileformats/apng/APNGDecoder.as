@@ -389,12 +389,10 @@ package be.alfredo.fileformats.apng
 			var sequenceNumber:uint	=	data.readUnsignedInt();
 			var width:uint			=	data.readUnsignedInt();
 			var height:uint			=	data.readUnsignedInt();
-			// TODO: Support for offset images
 			var xOffset:uint		=	data.readUnsignedInt();
 			var yOffset:uint		=	data.readUnsignedInt();
 			var delayNum:uint		=	data.readUnsignedShort();
 			var delayDen:uint		=	data.readUnsignedShort();
-			// TODO: Support for disposal and blend modes
 			var disposeOp:uint		=	data.readUnsignedByte();
 			var blendOp:uint		=	data.readUnsignedByte();
 			
