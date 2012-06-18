@@ -4,24 +4,41 @@ package be.alfredo.fileformats.apng
 	import flash.display.Sprite;
 	import flash.events.Event;
 	import flash.events.IOErrorEvent;
+	import flash.events.ProgressEvent;
 	import flash.events.TimerEvent;
 	import flash.net.URLLoader;
 	import flash.net.URLLoaderDataFormat;
 	import flash.net.URLRequest;
+	import flash.net.URLStream;
+	import flash.utils.ByteArray;
 	import flash.utils.Timer;
+	import flash.utils.setTimeout;
 	
 	/**
-	 * A player for animated PNGs.
+	 * A streaming player/decoder for the APNG data format.
+	 * This player loads an animated PNG
 	 * 
 	 * @author Frederick Jansen
 	 */ 
 	public class APNGPlayer extends Sprite
 	{
 		/**
-		 * Loader of the APNG file
+		 * Stream of the APNG file
 		 * @private
 		 */ 
-		private var loader:URLLoader;
+		private var stream:URLStream;
+		
+		/**
+		 * Buffer of the file to be loaded
+		 * @private
+		 */
+		private var apngBuffer:ByteArray = new ByteArray();
+		
+		/**
+		 * Minimum size of the buffer before it's read
+		 * @private
+		 */
+		private var bufferSize:uint = 1024 * 2;
 		
 		/**
 		 * Whether to autoplay the animation or not
@@ -82,10 +99,10 @@ package be.alfredo.fileformats.apng
 		 */ 
 		public function APNGPlayer( autoplay:Boolean = true )
 		{
-			loader = new URLLoader();
-			loader.dataFormat = URLLoaderDataFormat.BINARY;
-			loader.addEventListener( IOErrorEvent.IO_ERROR, ioErrorHandler );
-			loader.addEventListener( Event.COMPLETE, completeHandler );
+			stream = new URLStream();
+			stream.addEventListener( ProgressEvent.PROGRESS, readBuffer );
+			stream.addEventListener( IOErrorEvent.IO_ERROR, ioErrorHandler );
+			stream.addEventListener( Event.COMPLETE, completeHandler );
 			
 			playTimer = new Timer(75);
 			playTimer.addEventListener( TimerEvent.TIMER, updateFrame );
@@ -100,7 +117,7 @@ package be.alfredo.fileformats.apng
 		 */ 
 		public function load( url:URLRequest ):void
 		{
-			loader.load( url );
+			stream.load( url );
 		}
 		
 		/**
@@ -198,10 +215,38 @@ package be.alfredo.fileformats.apng
 		 */ 
 		private function completeHandler( event:Event ):void
 		{
-			dispatchEvent( event );
-			apngDecoder = new APNGDecoder( event.target.data );
-			apngDecoder.addEventListener( APNGDecoder.ANIMATION_LOADED, onAnimationLoaded );
-			apngDecoder.startDecoding();
+			stream.readBytes( apngBuffer, apngBuffer.length, stream.bytesAvailable );
+			
+			stream.removeEventListener( ProgressEvent.PROGRESS, readBuffer );
+			stream.removeEventListener( IOErrorEvent.IO_ERROR, ioErrorHandler );
+			stream.removeEventListener( Event.COMPLETE, completeHandler );
+			
+			trace("complete event");
+			
+			// Decode the remaining buffer while the end of the file hasn't been reached
+			while( !apngDecoder.eof )
+			{
+				trace("not eof");
+				if( !APNGDecoder.DECODING_FRAME )
+				{
+					trace("still decoding");
+					apngDecoder.parseChunks( apngBuffer );
+				}
+			}
+		}
+		
+		/**
+		 * To mimic browser behaviour, show the latest decoded frame 
+		 * from the stream
+		 * 
+		 * @param	event	Frame decoded event
+		 */ 
+		protected function frameDecodedHandler( event:Event ):void
+		{
+			frames = apngDecoder.frames;
+			
+			bmp.bitmapData = frames[currentFrame].images[0];
+			currentFrame++;
 		}
 		
 		/**
@@ -209,12 +254,13 @@ package be.alfredo.fileformats.apng
 		 * 
 		 * @param	event	Animation Loaded event
 		 */ 
-		private function onAnimationLoaded(event:Event):void
+		private function animationLoadedHandler(event:Event):void
 		{
-			apngDecoder.removeEventListener( APNGDecoder.ANIMATION_LOADED, onAnimationLoaded );
-			frames = apngDecoder.frames;
-			bmp = new Bitmap( null );
-			addChild( bmp );
+			currentFrame = 0;
+			
+			apngDecoder.removeEventListener( APNGDecoder.ANIMATION_LOADED, animationLoadedHandler );
+			apngDecoder.removeEventListener( APNGDecoder.FRAME_DECODED, animationLoadedHandler );
+			
 			if( autoplay )
 			{
 				playTimer.start();
@@ -231,6 +277,37 @@ package be.alfredo.fileformats.apng
 		private function ioErrorHandler( event:IOErrorEvent ):void
 		{
 			dispatchEvent( event );
-		}		
+		}
+		
+		/**
+		 * Handle the incoming stream
+		 * 
+		 * @param	event	ProgressEvent
+		 */ 
+		protected function readBuffer( event:ProgressEvent ):void
+		{
+			if( stream.bytesAvailable > bufferSize )
+			{
+				// TODO: Check how the apngBuffer contents is affected when this event is triggered
+				stream.readBytes( apngBuffer, apngBuffer.length, stream.bytesAvailable );
+				if( apngDecoder == null )
+				{
+					bmp = new Bitmap( null );
+					addChild( bmp );
+					
+					apngDecoder = new APNGDecoder( apngBuffer );
+					apngDecoder.addEventListener( APNGDecoder.FRAME_DECODED, frameDecodedHandler );
+					apngDecoder.addEventListener( APNGDecoder.ANIMATION_LOADED, animationLoadedHandler );
+					apngDecoder.startDecoding();
+				}
+				else
+				{
+					if( !APNGDecoder.DECODING_FRAME )
+					{
+						apngDecoder.parseChunks( apngBuffer );
+					}
+				}
+			}
+		}
 	}
 }

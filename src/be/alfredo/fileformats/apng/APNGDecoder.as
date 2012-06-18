@@ -25,14 +25,14 @@ package be.alfredo.fileformats.apng
 		 * The incoming APNG to decode.
 		 * @private
 		 */ 
-		private var file:BitArray;
+		private var file:ByteArray;
 		
 		/**
 		 * Set to true when the IEND chunk is encountered. This will 
 		 * stop the application from trying to read unavailable data.
 		 * @private
 		 */ 
-		private var eof:Boolean = false;
+		public var eof:Boolean = false;
 		
 		/**
 		 * The acTL chunk needs to be present in all animated PNGs. 
@@ -60,6 +60,13 @@ package be.alfredo.fileformats.apng
 		 * @private
 		 */ 
 		private var currentFrame:int = -1;
+		
+		/**
+		 * If the buffer is smaller than the chunkLength, we roll back to 
+		 * this position.
+		 * @private
+		 */ 
+		private var initialPos:uint;
 
 		/**
 		 * The amount of bytes necessary for each pixel
@@ -151,7 +158,7 @@ package be.alfredo.fileformats.apng
 		 * 3: Indexed-colour
 		 * 4: Greyscale with alpha
 		 * 6: Truecolour with alpha (RGBA)
-		 */ 
+		 */
 		public function get colourType():uint
 		{
 			return _colourType;
@@ -159,7 +166,7 @@ package be.alfredo.fileformats.apng
 		
 		/**
 		 * Compression method used, only 0 is defined (deflate/inflate)
-		 */ 
+		 */
 		public function get compressionMethod():uint
 		{
 			return _compressionMethod;
@@ -168,7 +175,7 @@ package be.alfredo.fileformats.apng
 		/**
 		 * Filter method used, only 0 is defined (adaptive filtering with 
 		 * 5 basic filter types)
-		 */ 
+		 */
 		public function get filterMethod():uint
 		{
 			return _filterMethod;
@@ -176,7 +183,7 @@ package be.alfredo.fileformats.apng
 		
 		/**
 		 * The interlace method of the image
-		 */ 
+		 */
 		public function get interlaceMethod():uint
 		{
 			return _interlaceMethod;
@@ -202,33 +209,47 @@ package be.alfredo.fileformats.apng
 		
 		/**
 		 * All frames of the animation, including extra data
-		 */ 
+		 */
 		public function get frames():Vector.<APNGFrame>
 		{
 			return _frames;
 		}
 		
 		/**
-		 * The animation has been loaded
+		 * Set to true when a frame is already being decoded, so you don't 
+		 * decode the same one twice
+		 */
+		public static var DECODING_FRAME:Boolean = false;
+		
+		/**
+		 * Dispatched when a single frame has been decoded
 		 */ 
+		public static const FRAME_DECODED:String = "frame_decoded";
+		
+		/**
+		 * Dispatched when the animation has been loaded
+		 */
 		public static const ANIMATION_LOADED:String = "animation_loaded";
 		
 		
 		/**
 		 * Class constructor, read in the APNG file
+		 * 
+		 * @param	data	The initial buffer of the data to be decoded
 		 */
 		public function APNGDecoder( data:ByteArray )
 		{
-			file = new BitArray( data );
+			this.file = data;
 		}
 		
 		/**
 		 * Start decoding an APNG file
-		 */ 
+		 */
 		public function startDecoding():void
 		{
 			var header:String = "";
 			var headerPart:uint;
+			
 			for( var i:uint = 0; i < 8; i++ )
 			{
 				headerPart = file.readUnsignedByte();
@@ -245,9 +266,6 @@ package be.alfredo.fileformats.apng
 			// Mandatory header for all PNG files
 			if( header.toUpperCase() == "89504E470D0A1A0A" )
 			{
-				/*frames = new Vector.<APNGFrame>();
-				pngFrame = new APNGFrame( null );
-				frames[currentFrame] = pngFrame;*/
 				parseChunks();
 			}
 			else
@@ -258,10 +276,38 @@ package be.alfredo.fileformats.apng
 		
 		/**
 		 * Parse all image chunks 
-		 */ 
-		private function parseChunks():void
+		 * 
+		 * @param	buffer	The buffer of the data to be decoded
+		 */
+		public function parseChunks( buffer:ByteArray = null ):void
 		{
+			DECODING_FRAME = true;
+			
+			if( buffer != null )
+			{
+				this.file = buffer;
+			}
+			// TODO: Check what actually happens when the buffersize isn't big enough to the position
+			// of the buffer. Do we miss any bytes or is buffer passed by reference?
+			initialPos = file.position;
+			
+			// Not enough bytes to read the chunk type
+			if( file.bytesAvailable < 4 )
+			{
+				DECODING_FRAME = false;
+				return;
+			}
+			
 			var chunkLength:uint = file.readUnsignedInt();
+			
+			// Add 4 bytes to account for a 32-bit CRC, which isn't included in the chunk length
+			if( file.bytesAvailable < chunkLength + 4 )
+			{
+				DECODING_FRAME = false;
+				// Not enough bytes available, roll back
+				file.position = initialPos;
+				return;
+			}
 			var chunkType:uint = file.readUnsignedInt();
 			
 			var tempData:ByteArray = new ByteArray();
@@ -316,6 +362,7 @@ package be.alfredo.fileformats.apng
 			}
 			else
 			{
+				trace("eof");
 				dispatchEvent( new Event( ANIMATION_LOADED ) );
 			}
 			chunkData = null;
@@ -325,7 +372,7 @@ package be.alfredo.fileformats.apng
 		 * Parse the image header
 		 * 
 		 * @param	data	BitArray of image header
-		 */ 
+		 */
 		private function parseHeader( data:BitArray ):void
 		{			
 			_width = data.readUnsignedInt();
@@ -342,7 +389,7 @@ package be.alfredo.fileformats.apng
 		/**
 		 * Set the amount of pixels per byte by looking at the 
 		 * colour type and bit depth of a channel.
-		 */ 
+		 */
 		private function determineBytesPerPixel():void
 		{
 			if( bitDepth == 8 && colourType == 6 )		// RGBA
@@ -365,7 +412,7 @@ package be.alfredo.fileformats.apng
 		 * 
 		 * @param	data	 BitArray representing an Animation Control Chunk
 		 * @see		<a href="https://wiki.mozilla.org/APNG_Specification#.60acTL.60:_The_Animation_Control_Chunk">Animation Control Chunk</a>
-		 */ 
+		 */
 		private function parseAnimationControlChunk( data:BitArray ):void
 		{
 			_numFrames = data.readUnsignedInt();
@@ -383,7 +430,7 @@ package be.alfredo.fileformats.apng
 		 * 
 		 * @param	data	 BitArray representing a Frame Control Chunk
 		 * @see		<a href="https://wiki.mozilla.org/APNG_Specification#.60fcTL.60:_The_Frame_Control_Chunk">Frame Control Chunk</a>
-		 */ 
+		 */
 		private function parseFrameControlChunk( data:BitArray ):void
 		{			
 			var sequenceNumber:uint	=	data.readUnsignedInt();
@@ -421,7 +468,7 @@ package be.alfredo.fileformats.apng
 		 * @param	data	BitArray of the image data
 		 * @param	fdAT	Boolean indicating whether we're dealing with an fdAT 
 		 * 					or IDAT chunk
-		 */ 
+		 */
 		private function parseImage( data:BitArray, fdAT:Boolean = false ):void
 		{
 			// Currently not used, but is supposed to be ascending order according to spec
@@ -478,7 +525,7 @@ package be.alfredo.fileformats.apng
 		 * filter immediately.
 		 * 
 		 * @param	data	The encoded image data
-		 */ 
+		 */
 		private function createTrueColorImage( data:BitArray ):void
 		{
 			var image:BitmapData = new BitmapData( _width, _height, true, 0x00000000 );	
@@ -669,6 +716,9 @@ package be.alfredo.fileformats.apng
 			pixels = null;
 			previousColourRow = null;
 			currentColourRow = null;
+			
+			dispatchEvent( new Event( FRAME_DECODED ) );
+			trace("Decoded frame");
 		}
 		
 		/**
@@ -678,7 +728,7 @@ package be.alfredo.fileformats.apng
 		 * @param	above		The matching colour of the pixel above the current one
 		 * @param	upperLeft	The matching colour of the pixel to the left and top of the current one
 		 * @return	uint		The Paeth Predictor
-		 */ 
+		 */
 		private function paethPredictor( left:uint, above:uint, upperLeft:uint ):uint
 		{
 			var p:int;

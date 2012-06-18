@@ -33,7 +33,7 @@ package
 			addChild(apngPlayer);
 		}
 		
-		protected function onApngLoaded(event:Event):void
+		protected function onApngLoaded( event:Event ):void
 		{
 			/*slider = new Slider();
 			slider.minimum = 0;
