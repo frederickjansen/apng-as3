@@ -106,53 +106,41 @@ package be.alfredo.io
 		 * bitshifts and temporary variables. That logic has been moved
 		 * into this method.
 		 *
-		 * @param	bits	Amount of bits you want to read.
+		 * @param	length	Amount of bits you want to read.
 		 * @return	val		The resulting uint.
 		 */
 
 		public function readUnsignedBits( length:uint ):uint
 		{
-			var val:uint;
-			var nextByte:uint;
+			var val:uint = 0;
+			var temp:int = length;
 
-			if( length + _bitPosition <= 8 )
+			while (temp + _bitPosition > 0)
 			{
-				val = readUnsignedByte();
-				nextByte = 8;
+				val <<= 8;
+				val |= this.readUnsignedByte();
+				temp -= 8;
 			}
-			else if( length + _bitPosition <= 16 )
+
+			bitPosition = _bitPosition + length;
+
+			// If bitPosition isn't 0 we've read too many bytes and need to go back one spot
+			if (_bitPosition)
 			{
-				val = readUnsignedShort();
-				nextByte = 16;
+				// When we reduce the position, we lose the bitPosition so we keep a temporary copy
+				const oldBitPosition:uint = _bitPosition;
+				position--;
+				_bitPosition = oldBitPosition;
+
+				val = (val >> (8 - _bitPosition)) & SHIFTS[length];
 			}
 			else
 			{
-				val = readUnsignedInt();
-				nextByte = 32;
+				// If bitPosition is 0, we're right aligned and don't need to shift
+				val &= SHIFTS[length];
 			}
 
-			val = (val >> (nextByte - length - _bitPosition)) & SHIFTS[length];
-			var tempBitPosition:uint = _bitPosition;
-
-			// Decide which byte to move to
-			switch( nextByte )
-			{
-				case 8:
-					position -= (length + _bitPosition) == 8 ? 0 : 1;
-					bitPosition = tempBitPosition + length;
-					break;
-				case 16:
-					position -= (length + _bitPosition) == 16 ? 0 : 1;
-					bitPosition = tempBitPosition + length;
-					break;
-				case 32:
-					if( (length + _bitPosition) == 32 ) break;
-					position -= (length + _bitPosition) < 24 ? 2 : 1;
-					bitPosition = tempBitPosition + length;
-					break;
-			}
 			return val;
-
 		}
 
 		/**
@@ -160,7 +148,7 @@ package be.alfredo.io
 		 * This method makes use of readUnsignedBits to reads its
 		 * value and adjusts it based on the sign.
 		 *
-		 * @param	bits	Amount of bits you want to read.
+		 * @param	length	Amount of bits you want to read.
 		 * @return	int		The resulting int.
 		 * @see				readUnsignedBits
 		 */
