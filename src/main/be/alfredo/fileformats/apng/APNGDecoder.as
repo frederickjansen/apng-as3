@@ -452,6 +452,7 @@ package be.alfredo.fileformats.apng
 			{
 				case 2:							// RGB
 					createTrueColorImage( data );
+					break;
 				case 6:							// RGBA
 					createTrueColorImage( data );
 					break;
@@ -655,13 +656,13 @@ package be.alfredo.fileformats.apng
 			}
 			
 			image.unlock();
-			if( _frames[currentFrame].frameControlChunk.blendOp == 0 )
+			/*if( _frames[currentFrame].frameControlChunk.blendOp == 1 && currentFrame )
 			{
-				/*var tempImage:BitmapData = new BitmapData( fWidth, fHeight );
+				var tempImage:BitmapData = new BitmapData( fWidth, fHeight );
 				tempImage.draw( _frames[currentFrame - 1].images[0], null, null, BlendMode.ADD );
-				tempImage.draw( image, null, null, BlendMode.ADD );*/
-				image.draw( _frames[currentFrame - 1].images[0], null, null, BlendMode.ADD );				
-			}
+				tempImage.draw( image, null, null, BlendMode.ADD );
+				image.draw( _frames[currentFrame - 1].images[0], null, null, BlendMode.ADD );
+			}*/
 			_frames[currentFrame].images.push( image );
 			
 			image = null;
