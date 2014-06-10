@@ -81,13 +81,13 @@ package be.alfredo.io
 		 */
 		public function readBit():Boolean
 		{
-			var byte:uint = this.readUnsignedByte();
-			var val:Boolean = (( ( byte >> ( 7 - _bitPosition ) ) & 0x01 ) == 1);
+			const byte:uint = this.readUnsignedByte();
+			const val:Boolean = (( ( byte >> ( 7 - _bitPosition ) ) & 0x01 ) == 1);
 
 			// Go back to the start of the byte if we're not reading the last bit
 			if( _bitPosition != 7 )
 			{
-				var tempBitPosition:uint = _bitPosition;
+				const tempBitPosition:uint = _bitPosition;
 				position--;
 				_bitPosition = ++tempBitPosition;
 			}
@@ -174,8 +174,8 @@ package be.alfredo.io
 		 */
 		public function readSignedRice( parameter:uint ):int
 		{
-			var msb:uint	= this.readUnary( 1 );
-			var lsb:uint	= this.readUnsignedBits( parameter );
+			const msb:uint	= this.readUnary( 1 );
+			const lsb:uint	= this.readUnsignedBits( parameter );
 			var value:uint	= (msb << parameter) | lsb;
 
 			if( value & 1 ) // signed, value next to lsb instead of msb
